@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Coin Catch</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&display=swap">
+<style>
+:root{--bg:#dce8f2;--panel:#ffffff;--ink:#16263a;--muted:#5b6f85;--accent:#e0573b;--good:#1f9d6b;--bar:#c4d4e4;
+--penny:#c9783c;--silver:#c3cad2;--edge:#16263a;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1a2b;--panel:#17283f;--ink:#eaf1f8;--muted:#8fa4bb;--accent:#ff7a5c;--good:#3ed598;--bar:#26405e;--edge:#0a1422}}
+:root[data-theme="dark"]{--bg:#0e1a2b;--panel:#17283f;--ink:#eaf1f8;--muted:#8fa4bb;--accent:#ff7a5c;--good:#3ed598;--bar:#26405e;--edge:#0a1422}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Fredoka","Trebuchet MS",system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+header{padding:12px 16px 8px;display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:560px;width:100%;margin:0 auto}
+.stat{font-size:15px;color:var(--muted)}
+.stat b{color:var(--ink);font-size:20px}
+.target{text-align:center;flex:1}
+.target small{display:block;font-size:14px;color:var(--muted)}
+.target strong{font-size:46px;line-height:1;font-weight:700}
+.meter{max-width:560px;width:calc(100% - 32px);margin:0 auto 8px;display:flex;align-items:center;gap:12px}
+.bar{flex:1;height:14px;background:var(--bar);border-radius:8px;overflow:hidden}
+.fill{height:100%;width:0;background:var(--good);transition:width .15s}
+.have{font-size:18px;min-width:90px;text-align:right}
+#field{position:relative;flex:1;max-width:560px;width:100%;margin:0 auto;overflow:hidden;background:var(--panel);border-radius:18px 18px 0 0}
+#field.shake{animation:sh .35s}
+#field.win{animation:win .4s}
+@keyframes sh{20%{transform:translateX(-10px)}40%{transform:translateX(10px)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}
+@keyframes win{50%{background:color-mix(in srgb,var(--good) 25%,var(--panel))}}
+.coin{position:absolute;top:0;left:0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--edge);border:3px solid var(--edge);box-shadow:inset 0 0 0 4px rgba(255,255,255,.35);cursor:pointer;will-change:transform}
+.coin.penny{background:var(--penny)}
+.coin.silver{background:var(--silver)}
+.pop{animation:pop .18s forwards;pointer-events:none}
+@keyframes pop{to{opacity:0;scale:1.5}}
+footer{max-width:560px;width:100%;margin:0 auto;background:var(--panel);padding:10px 16px 14px;display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:14px;color:var(--muted)}
+button{font:inherit;font-weight:700;border:0;border-radius:12px;padding:10px 18px;background:var(--accent);color:#fff;cursor:pointer}
+button.ghost{background:var(--bar);color:var(--ink)}
+button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+#overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px;background:color-mix(in srgb,var(--panel) 92%,transparent);z-index:5}
+#overlay h1{margin:0;font-size:34px}
+#overlay p{margin:0;max-width:300px;color:var(--muted);font-size:17px;line-height:1.4}
+.hidden{display:none!important}
+@media(prefers-reduced-motion:reduce){#field.shake,#field.win{animation:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="stat">Score<br><b id="score">0</b></div>
+  <div class="target"><small>Make exactly</small><strong id="target">0¢</strong></div>
+  <div class="stat" style="text-align:right">Lives<br><b id="lives">3</b></div>
+</header>
+<div class="meter"><div class="bar"><div class="fill" id="fill"></div></div><div class="have" id="have">0¢</div></div>
+<div id="field">
+  <div id="overlay">
+    <h1 id="ovTitle">Coin Catch</h1>
+    <p id="ovText">Tap the falling coins to add up to the target amount. Go over and you lose a life.</p>
+    <button id="startBtn">Play</button>
+  </div>
+</div>
+<footer>
+  <span>Penny 1 · Nickel 5 · Dime 10 · Quarter 25</span>
+  <button class="ghost" id="resetBtn">Clear</button>
+</footer>
+<script>
+(function(){
+var TYPES=[{v:1,s:50,c:'penny'},{v:5,s:58,c:'silver'},{v:10,s:44,c:'silver'},{v:25,s:68,c:'silver'}];
+var field=document.getElementById('field'),overlay=document.getElementById('overlay');
+var el={score:score,lives:lives,target:target,have:have,fill:fill};
+var S={target:0,total:0,lives:3,score:0,level:1,coins:[],run:false,last:0,spawnT:0};
+function newTarget(){
+  var max=Math.min(99,18+S.level*7),t;
+  do{t=5+Math.floor(Math.random()*(max-4));}while(t===S.target);
+  S.target=t;S.total=0;draw();
+}
+function draw(){
+  el.score.textContent=S.score;el.lives.textContent=S.lives;
+  el.target.textContent=S.target+'¢';el.have.textContent=S.total+'¢';
+  el.fill.style.width=Math.min(100,S.total/S.target*100)+'%';
+}
+function spawn(){
+  var rem=S.target-S.total,pool=[];
+  TYPES.forEach(function(t){
+    if(t.v<=rem){for(var i=0;i<(t.v===1?2:3);i++)pool.push(t);}
+    else if(Math.random()<0.25)pool.push(t);
+  });
+  if(!pool.length)pool.push(TYPES[0]);
+  var t=pool[Math.floor(Math.random()*pool.length)];
+  var d=document.createElement('div');
+  d.className='coin '+t.c;d.style.width=d.style.height=t.s+'px';d.style.fontSize=(t.s*0.4)+'px';
+  d.textContent=t.v;
+  var c={t:t,el:d,x:Math.random()*(field.clientWidth-t.s),y:-t.s,vy:70+S.level*9+Math.random()*50};
+  d.addEventListener('pointerdown',function(e){e.preventDefault();grab(c);});
+  field.appendChild(d);S.coins.push(c);
+}
+function remove(c,pop){
+  S.coins=S.coins.filter(function(k){return k!==c;});
+  if(pop){c.el.classList.add('pop');setTimeout(function(){c.el.remove();},200);}else c.el.remove();
+}
+function flash(cls){field.classList.remove('shake','win');void field.offsetWidth;field.classList.add(cls);}
+function grab(c){
+  if(!S.run)return;
+  remove(c,true);S.total+=c.t.v;
+  if(S.total===S.target){
+    S.score+=10+Math.max(0,S.target>50?5:0);S.level++;flash('win');newTarget();
+  }else if(S.total>S.target){
+    S.lives--;flash('shake');S.total=0;
+    if(S.lives<=0){draw();end();return;}
+  }
+  draw();
+}
+function end(){
+  S.run=false;
+  document.getElementById('ovTitle').textContent='Game over';
+  document.getElementById('ovText').textContent='You scored '+S.score+' and reached level '+S.level+'.';
+  document.getElementById('startBtn').textContent='Play again';
+  overlay.classList.remove('hidden');
+}
+function start(){
+  S.coins.forEach(function(c){c.el.remove();});S.coins=[];
+  S.lives=3;S.score=0;S.level=1;S.target=0;newTarget();
+  S.run=true;S.spawnT=0;S.last=performance.now();overlay.classList.add('hidden');
+  requestAnimationFrame(loop);
+}
+function loop(now){
+  if(!S.run)return;
+  var dt=Math.min(0.05,(now-S.last)/1000);S.last=now;
+  S.spawnT-=dt;
+  if(S.spawnT<=0){spawn();S.spawnT=Math.max(0.45,0.95-S.level*0.04);}
+  var h=field.clientHeight;
+  S.coins.slice().forEach(function(c){
+    c.y+=c.vy*dt;
+    c.el.style.transform='translate('+c.x+'px,'+c.y+'px)';
+    if(c.y>h)remove(c,false);
+  });
+  requestAnimationFrame(loop);
+}
+document.getElementById('startBtn').onclick=start;
+document.getElementById('resetBtn').onclick=function(){if(S.run){S.total=0;draw();}};
+draw();
+})();
+</script>
+</body>
+</html>
