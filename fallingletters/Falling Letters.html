@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Falling Letters</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&display=swap">
+<style>
+:root{--bg:#dce8f2;--panel:#fff;--ink:#16263a;--muted:#5b6f85;--accent:#e0573b;--good:#1f9d6b;--bar:#c4d4e4;--tile:#ffd166;--edge:#16263a;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1a2b;--panel:#17283f;--ink:#eaf1f8;--muted:#8fa4bb;--accent:#ff7a5c;--good:#3ed598;--bar:#26405e;--tile:#e9b949;--edge:#0a1422}}
+:root[data-theme="dark"]{--bg:#0e1a2b;--panel:#17283f;--ink:#eaf1f8;--muted:#8fa4bb;--accent:#ff7a5c;--good:#3ed598;--bar:#26405e;--tile:#e9b949;--edge:#0a1422}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Fredoka","Trebuchet MS",system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+header{padding:12px 16px 4px;display:flex;justify-content:space-between;max-width:560px;width:100%;margin:0 auto}
+.stat{font-size:15px;color:var(--muted)}.stat b{color:var(--ink);font-size:20px}
+.word{max-width:560px;width:100%;margin:0 auto;text-align:center;padding:0 16px 10px}
+#clue{font-size:52px;line-height:1.1}
+#slots{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:6px}
+.slot{width:36px;height:46px;border-bottom:4px solid var(--ink);font-size:34px;font-weight:700;line-height:46px;text-transform:uppercase}
+.slot.next{border-color:var(--accent)}
+#field{position:relative;flex:1;max-width:560px;width:100%;margin:0 auto;overflow:hidden;background:var(--panel);border-radius:18px 18px 0 0}
+#field.shake{animation:sh .35s}#field.win{animation:win .4s}
+@keyframes sh{20%{transform:translateX(-10px)}40%{transform:translateX(10px)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}
+@keyframes win{50%{background:color-mix(in srgb,var(--good) 25%,var(--panel))}}
+.tile{position:absolute;top:0;left:0;width:58px;height:58px;border-radius:14px;background:var(--tile);border:3px solid var(--edge);display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:700;color:#16263a;text-transform:uppercase;cursor:pointer;will-change:transform}
+.pop{animation:pop .18s forwards;pointer-events:none}.bad{background:var(--accent)!important}
+@keyframes pop{to{opacity:0;scale:1.5}}
+#overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px;background:color-mix(in srgb,var(--panel) 92%,transparent);z-index:5}
+#overlay h1{margin:0;font-size:34px}#overlay p{margin:0;max-width:300px;color:var(--muted);font-size:17px;line-height:1.4}
+button{font:inherit;font-weight:700;border:0;border-radius:12px;padding:10px 22px;background:var(--accent);color:#fff;cursor:pointer}
+button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+.hidden{display:none!important}
+@media(prefers-reduced-motion:reduce){#field.shake,#field.win{animation:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="stat">Score<br><b id="score">0</b></div>
+  <div class="stat" style="text-align:right">Lives<br><b id="lives">3</b></div>
+</header>
+<div class="word"><div id="clue"></div><div id="slots"></div></div>
+<div id="field">
+  <div id="overlay">
+    <h1 id="ovTitle">Falling Letters</h1>
+    <p id="ovText">Look at the picture and tap the falling letters in order to spell the word. A wrong letter costs a life.</p>
+    <button id="startBtn">Play</button>
+  </div>
+</div>
+<script>
+(function(){
+var WORDS=[['cat','🐱'],['dog','🐶'],['sun','☀️'],['fish','🐟'],['bird','🐦'],['tree','🌳'],['milk','🥛'],['moon','🌙'],['apple','🍎'],['house','🏠'],['water','💧'],['train','🚂'],['pizza','🍕'],['snake','🐍'],['plane','✈️'],['clock','🕒'],['mouse','🐭'],['horse','🐴'],['flower','🌸'],['rocket','🚀'],['guitar','🎸'],['banana','🍌'],['turtle','🐢'],['pencil','✏️'],['bridge','🌉'],['dragon','🐉'],['castle','🏰'],['giraffe','🦒'],['penguin','🐧'],['balloon','🎈'],['elephant','🐘'],['umbrella','☂️'],['butterfly','🦋'],['mountain','⛰️'],['dinosaur','🦕']];
+var field=document.getElementById('field'),overlay=document.getElementById('overlay'),slots=document.getElementById('slots'),clue=document.getElementById('clue');
+var S={w:'',i:0,n:0,lives:3,score:0,tiles:[],run:false,last:0,sp:0};
+function draw(){document.getElementById('score').textContent=S.score;document.getElementById('lives').textContent=S.lives;}
+function newWord(){
+  S.w=WORDS[Math.min(S.n,WORDS.length-1)][0];clue.textContent=WORDS[Math.min(S.n,WORDS.length-1)][1];
+  if(S.n>=WORDS.length)S.w=WORDS[Math.floor(Math.random()*WORDS.length)][0],clue.textContent=WORDS.filter(function(x){return x[0]===S.w})[0][1];
+  S.i=0;slots.innerHTML='';
+  for(var k=0;k<S.w.length;k++){var s=document.createElement('span');s.className='slot';slots.appendChild(s);}
+  mark();
+}
+function mark(){Array.prototype.forEach.call(slots.children,function(s,k){s.classList.toggle('next',k===S.i);});}
+function spawn(){
+  var r=Math.random(),ch;
+  if(r<0.45)ch=S.w[S.i];
+  else if(r<0.8)ch=S.w[Math.floor(Math.random()*S.w.length)];
+  else ch='abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random()*26)];
+  var d=document.createElement('div');d.className='tile';d.textContent=ch;
+  var c={ch:ch,el:d,x:Math.random()*(field.clientWidth-58),y:-60,vy:60+S.n*5+Math.random()*40};
+  d.addEventListener('pointerdown',function(e){e.preventDefault();tap(c);});
+  field.appendChild(d);S.tiles.push(c);
+}
+function remove(c,pop,bad){
+  S.tiles=S.tiles.filter(function(k){return k!==c;});
+  if(pop){c.el.classList.add('pop');if(bad)c.el.classList.add('bad');setTimeout(function(){c.el.remove();},200);}else c.el.remove();
+}
+function flash(cls){field.classList.remove('shake','win');void field.offsetWidth;field.classList.add(cls);}
+function tap(c){
+  if(!S.run)return;
+  if(c.ch===S.w[S.i]){
+    remove(c,true);slots.children[S.i].textContent=c.ch;S.i++;mark();
+    if(S.i===S.w.length){S.score+=S.w.length*2;S.n++;flash('win');draw();setTimeout(function(){if(S.run)newWord();},500);S.i=-1;mark();}
+  }else{
+    remove(c,true,true);S.lives--;flash('shake');draw();if(S.lives<=0)end();
+  }
+}
+function end(){
+  S.run=false;
+  document.getElementById('ovTitle').textContent='Game over';
+  document.getElementById('ovText').textContent='You spelled '+S.n+' word'+(S.n===1?'':'s')+' and scored '+S.score+'.';
+  document.getElementById('startBtn').textContent='Play again';overlay.classList.remove('hidden');
+}
+function start(){
+  S.tiles.forEach(function(c){c.el.remove();});S.tiles=[];
+  S.lives=3;S.score=0;S.n=0;draw();newWord();S.run=true;S.sp=0;S.last=performance.now();
+  overlay.classList.add('hidden');requestAnimationFrame(loop);
+}
+function loop(now){
+  if(!S.run)return;
+  var dt=Math.min(0.05,(now-S.last)/1000);S.last=now;S.sp-=dt;
+  if(S.sp<=0){spawn();S.sp=Math.max(0.5,0.9-S.n*0.02);}
+  var h=field.clientHeight;
+  S.tiles.slice().forEach(function(c){c.y+=c.vy*dt;c.el.style.transform='translate('+c.x+'px,'+c.y+'px)';if(c.y>h)remove(c,false);});
+  requestAnimationFrame(loop);
+}
+document.getElementById('startBtn').onclick=start;
+draw();
+})();
+</script>
+</body>
+</html>
